@@ -50,7 +50,17 @@
 
 #include <visp3/core/vpHomogeneousMatrix.h>
 #include <visp3/robot/vpRobot.h>
+#include <string.h>
 
+#include <visp/vpDebug.h>
+#include <visp/vpRobotException.h>
+#include <visp/vpColVector.h>
+#include <visp/vpRobot.h>
+
+extern "C" {
+#include <cpi.h>
+//#include <cerial/cerial.h>
+}
 /*!
   \class vpRobotFlirPtu
   \ingroup group_robot_real_arm
@@ -59,37 +69,91 @@
 class VISP_EXPORT vpRobotFlirPtu : public vpRobot
 {
 public:
-  vpRobotFlirPtu();
-  virtual ~vpRobotFlirPtu();
+  typedef enum { STOP, SPEED } vpControllerStatusType;
 
-  void get_eJe(vpMatrix &eJe);
-  void get_fJe(vpMatrix &fJe);
+  typedef enum { FLIR_AXIS_PAN, FLIR_AXIS_TILT } FlirAxis;
 
-  /*!
-    Return constant transformation between end-effector and tool frame.
-    If your tool is a camera, this transformation is obtained by hand-eye calibration.
-   */
-  vpHomogeneousMatrix get_eMc() const { return m_eMc; }
+  typedef enum { INIT_IP, INIT_SERIAL } InitMode;
 
-  void getDisplacement(const vpRobot::vpControlFrameType frame, vpColVector &q);
-  void getPosition(const vpRobot::vpControlFrameType frame, vpColVector &q);
+  #ifndef DOXYGEN_SHOULD_SKIP_THIS
+  // SHM
+  typedef struct /* ControllerShm_struct */ {
+    vpControllerStatusType status[2];
+    double q_dot[2];
+    double actual_q[2];
+    double actual_q_dot[2];
+    bool jointLimit[2];
+    } shmType;
+  #endif /* DOXYGEN_SHOULD_SKIP_THIS */
 
-  /*!
-    Set constant transformation between end-effector and tool frame.
-    If your tool is a camera, this transformation is obtained by hand-eye calibration.
-   */
-  void set_eMc(vpHomogeneousMatrix &eMc) { m_eMc = eMc; }
+  vpRobotFlirPtu(int port);
+  vpRobotFlirPtu(std::string ip);
+  ~vpRobotFlirPtu();
+
+
+  void init();
+
+  void reset();
+  void goHome();
+  bool syncAndLock(struct cerial *cer);
+  void halt();
+
   void setPosition(const vpRobot::vpControlFrameType frame, const vpColVector &q);
+
+  void setBlockUntilPositioned(bool b);
+  bool getBlockUntilPositioned();
+
+  bool isRelativePositioning();
+  void setRelativePositioning(bool b);
+
+  void setContinuous(bool b);
+  bool getContinuous();
+
+  void setPositioningVelocity(FlirAxis axis, double i);
+  double getPositioningVelocity(FlirAxis axis);
+
+  void setMaxRotationVelocity(FlirAxis axis, const double maxVr);
+  double getMaxRotationVelocity(FlirAxis axis) const;
+
   void setVelocity(const vpRobot::vpControlFrameType frame, const vpColVector &vel);
 
-protected:
-  void init();
-  void getJointPosition(vpColVector &q);
-  void setCartVelocity(const vpRobot::vpControlFrameType frame, const vpColVector &v);
-  void setJointVelocity(const vpColVector &qdot);
+  void setVerbose(bool verbose);
 
-protected:
-  vpHomogeneousMatrix m_eMc; //!< Constant transformation between end-effector and tool (or camera) frame
+  void getPosition(const vpRobot::vpControlFrameType frame, vpColVector &q);
+  vpColVector getPosition(const vpRobot::vpControlFrameType frame);
+  vpColVector getVelocity();
+  void get_eJe(vpMatrix &_eJe);
+  void get_fJe(vpMatrix &_fJe);
+  void getDisplacement(const vpRobot::vpControlFrameType frame, vpColVector &q);
+
+  void set_cMe(vpHomogeneousMatrix m);
+  vpHomogeneousMatrix get_cMe();
+
+  double posToRadian(int pos);
+  int radianToPos(double rad);
+
+private:
+  struct cerial *cer;
+  uint16_t		status;
+  double		positioningVelocityPan;
+  double		positioningVelocityTilt;
+  vpColVector	q_previous; // used for getDisplacement
+  bool			blockUntilPositioned;
+  InitMode		initMode;
+  int			port;
+  std::string	ip;
+  double		maxPanVelocity;
+  bool			relativePositioning;
+  double		maxTiltVelocity;
+  bool			continuousMode;
+  vpHomogeneousMatrix cMe;
+  bool			verbose;
+
+  struct cerial *init(int port);
+  struct cerial *init(std::string ipAddress);
+  void initValues();
+  bool finishInit(int baud, int timeout, struct cerial *cer, bool immediateMode);
+  void initContinuous();
 };
 
 #endif

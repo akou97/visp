@@ -50,255 +50,674 @@
 #include <visp3/core/vpHomogeneousMatrix.h>
 #include <visp3/robot/vpRobotFlirPtu.h>
 
-/*!
-  Basic initialization.
- */
+
+/**
+Basic constructor for SERIAL connection
+\param port Serial port number
+*/
+vpRobotFlirPtu::vpRobotFlirPtu(int port)
+{
+  initMode = INIT_SERIAL;
+  this->port = port;
+}
+
+/**
+Basic constructor for IP connection
+\param ip Ip address
+*/
+vpRobotFlirPtu::vpRobotFlirPtu(std::string ip)
+{
+  initMode = INIT_IP;
+  this->ip = ip;
+}
+
+/**
+Basic destructor, close the connection to the robot and free the memory
+*/
+vpRobotFlirPtu::~vpRobotFlirPtu()
+{
+  if (verbose)
+    std::cout << "Closing connection and destroying vpRobotFlir instance" << std::endl;
+  cerclose(cer);
+  free(cer);
+}
+
+////////
+////
+////	GETTERS AND SETTERS
+////
+////////
+
+/**
+Set the effector to camera matrix
+\param m the matrix
+*/
+void vpRobotFlirPtu::set_cMe(vpHomogeneousMatrix m)
+{
+  if (verbose)
+    std::cout << "Setting cMe" << std::endl;
+  cMe = m;
+}
+
+/**
+Get the effector to camera matrix
+\return the matrix
+*/
+vpHomogeneousMatrix vpRobotFlirPtu::get_cMe() { return cMe; }
+
+/**
+Block the input until the position is reached (only in position mode)
+\param b true to block
+*/
+void vpRobotFlirPtu::setBlockUntilPositioned(bool b)
+{
+  if (verbose)
+    std::cout << "Setting blockUntilPositioned" << std::endl;
+  blockUntilPositioned = b;
+}
+
+/**
+Return true if the input is blocked until the position is reached (only in position mode)
+\return boolean
+*/
+bool vpRobotFlirPtu::getBlockUntilPositioned() { return blockUntilPositioned; }
+
+/**
+Set the positioning velocity (only in position mode)
+\param axis The axis (FLIR_AXIS_PAN or FLIR_AXIS_TILT)
+\param i The velocity (rad/s)
+*/
+void vpRobotFlirPtu::setPositioningVelocity(FlirAxis axis, double i)
+{
+  if (i <= getMaxRotationVelocity(axis) && i >= 0) {
+    if (axis == FLIR_AXIS_PAN) {
+      if (verbose)
+        std::cout << "Setting positioning velocity for pan axis" << std::endl;
+      positioningVelocityPan = i;
+    } else if (axis == FLIR_AXIS_TILT) {
+      if (verbose)
+        std::cout << "Setting positioning velocity for tilt axis" << std::endl;
+      positioningVelocityTilt = i;
+    } else
+      throw vpException(vpRobotException::lowLevelError, "Axis unknown");
+  } else {
+    throw vpException(vpRobotException::lowLevelError, "Velocity > max or velocity < min");
+  }
+}
+
+/**
+Get the positioning velocity used in position mode
+\param axis The axis (FLIR_AXIS_PAN or FLIR_AXIS_TILT)
+\return The velocity (rad/s)
+*/
+double vpRobotFlirPtu::getPositioningVelocity(FlirAxis axis)
+{
+  if (axis == FLIR_AXIS_PAN)
+    return positioningVelocityPan;
+  else if (axis == FLIR_AXIS_TILT)
+    return positioningVelocityTilt;
+  else
+    throw vpException(vpRobotException::lowLevelError, "Axis unknown");
+}
+
+/**
+Set the max rotation velocity
+\param axis The axis (FLIR_AXIS_PAN or FLIR_AXIS_TILT)
+\param maxVr The max rotation velocity (in rad/s)
+*/
+void vpRobotFlirPtu::setMaxRotationVelocity(FlirAxis axis, const double maxVr)
+{
+  if (axis == FLIR_AXIS_PAN) {
+    if (verbose)
+      std::cout << "Setting max rotation velocity for pan axis" << std::endl;
+    int maxPanSpeed;
+    cpi_ptcmd(cer, &status, OP_PAN_UPPER_SPEED_LIMIT_GET, &maxPanSpeed);
+    if (maxVr > maxPanSpeed) {
+      throw vpException(vpRobotException::lowLevelError, "The velocity is too high");
+    } else if (maxVr <= 0)
+      throw vpException(vpRobotException::lowLevelError, "You can't set a negative velocity");
+    else
+      maxPanVelocity = maxVr;
+  } else if (axis == FLIR_AXIS_TILT) {
+    if (verbose)
+      std::cout << "Setting max rotation velocity for tilt axis" << std::endl;
+    int maxTiltSpeed;
+    cpi_ptcmd(cer, &status, OP_TILT_UPPER_SPEED_LIMIT_GET, &maxTiltSpeed);
+    if (maxVr > maxTiltSpeed) {
+      throw vpException(vpRobotException::lowLevelError, "The velocity is too high");
+    } else if (maxVr <= 0)
+      throw vpException(vpRobotException::lowLevelError, "You can't set a negative velocity");
+    else
+      maxTiltVelocity = maxVr;
+  } else
+    throw vpException(vpRobotException::lowLevelError, "Axis unknown");
+}
+
+/**
+Get the max rotation velocity
+\param axis The axis (FLIR_AXIS_PAN or FLIR_AXIS_TILT)
+\return The max rotation velocity (in rad/s)
+*/
+double vpRobotFlirPtu::getMaxRotationVelocity(FlirAxis axis) const
+{
+  if (axis == FLIR_AXIS_PAN)
+    return maxPanVelocity;
+  else if (axis == FLIR_AXIS_TILT)
+    return maxTiltVelocity;
+  else
+    throw vpException(vpRobotException::lowLevelError, "Axis unknown");
+}
+
+void vpRobotFlirPtu::getDisplacement(const vpRobot::vpControlFrameType frame, vpColVector &q)
+{
+
+  vpColVector q_current; // current position
+
+  getPosition(vpRobot::ARTICULAR_FRAME, q_current);
+
+  if (frame == vpRobot::ARTICULAR_FRAME) {
+    q = q_current - q_previous;
+  }
+  q_previous = q_current; // Update for next call of this method
+}
+
+// TODO
+void vpRobotFlirPtu::get_eJe(vpMatrix &_eJe) { std::cout << " Not implemented yet" << std::endl; }
+
+void vpRobotFlirPtu::get_fJe(vpMatrix &_fJe) { std::cout << " Not implemented yet" << std::endl; }
+
+void vpRobotFlirPtu::setVerbose(bool verbose)
+{
+  this->verbose = true;
+  std::cout << " Verbose mode on" << std::endl;
+}
+
+////////
+////
+////	INITIALIZATION
+////
+////////
+
 void vpRobotFlirPtu::init()
 {
-  // If you want to control the robot in Cartesian in a tool frame, set the corresponding transformation in m_eMc
-  // that is set to identity by default in the constructor.
-
-  maxRotationVelocity = maxRotationVelocityDefault;
-  maxTranslationVelocity = maxTranslationVelocityDefault;
-
-  // Set here the robot degrees of freedom number
-  nDof = 2; // Flir Ptu has 2 dof
+  if (verbose)
+    std::cout << "Initializing the robot" << std::endl;
+  if (initMode == INIT_IP)
+    this->cer = init(ip);
+  else if (initMode == INIT_SERIAL)
+    this->cer = init(port);
+  initValues();
 }
 
-/*!
-  Default constructor.
+/** Initialize the connection to the robot, via serial port
+ * \param port  port number
+ * \returns a Cerial handle.
  */
-vpRobotFlirPtu::vpRobotFlirPtu() : m_eMc() { init(); }
+struct cerial *vpRobotFlirPtu::init(int port)
+{
+  if (verbose)
+    std::cout << "Initializing the connection to the robot via SERIAL port" << std::endl;
+  int baud, timeout;
+  char errstr[128];
+  struct cerial *cer;
+  const char *portname;
 
-/*!
-  Destructor.
+  std::string portAsString = "COM" + std::to_string(port);
+  portname = portAsString.c_str();
+
+  cer = (cerial *)malloc(sizeof(struct cerial));
+
+  /* get options */
+  baud = 9600;
+  timeout = 2000;
+
+  if (verbose)
+    std::cout << "Opening " << portname << std::endl;
+
+  /* open a port */
+  if (ceropen(cer, portname, CERIAL_FLAGS_NONE)) {
+    std::string error = "Failed to open " + portAsString + " : " + cerstrerror(cer, errstr, sizeof(errstr));
+    if (verbose)
+      std::cout << error << std::endl;
+    throw vpException(0, error);
+  }
+
+  if (!finishInit(baud, timeout, cer, true)) {
+    cerclose(cer);
+    throw vpException(0, "Error while finishing initialization");
+  }
+
+  return cer;
+}
+
+/** Initialize the connection to the robot, via ip address
+ *
+ * \param ip  ip address of the robot
+ *
+ * \returns a Cerial handle.
  */
-vpRobotFlirPtu::~vpRobotFlirPtu() { std::cout << "Not implemented ! " << std::endl; }
-
-/*
-  At least one of these function has to be implemented to control the robot with a
-  Cartesian velocity:
-  - get_eJe()
-  - get_fJe()
-*/
-
-/*!
-  Get the robot Jacobian expressed in the end-effector frame.
-  \param[out] eJe : End-effector frame Jacobian.
-*/
-void vpRobotFlirPtu::get_eJe(vpMatrix &eJe)
+struct cerial *vpRobotFlirPtu::init(std::string ip)
 {
-  (void)eJe;
-  std::cout << "Not implemented ! " << std::endl;
+  if (verbose)
+    std::cout << "Initializing connection via ip" << std::endl;
+  int baud, timeout;
+  char errstr[128];
+  struct cerial *cer;
+
+  cer = (cerial *)malloc(sizeof(struct cerial));
+
+  /* get options */
+  baud = 9600;
+  timeout = 2000;
+
+  /* open an ip address */
+  if (verbose)
+    std::cout << "Opening " << ip << std::endl;
+
+  ip = "tcp:" + ip;
+  if (ceropen(cer, ip.c_str(), CERIAL_FLAGS_NONE)) {
+    std::string error = "Failed to open " + ip + " : " + cerstrerror(cer, errstr, sizeof(errstr));
+    if (verbose)
+      std::cout << error << std::endl;
+    throw vpException(0, error);
+  }
+
+  if (!finishInit(baud, timeout, cer, true)) {
+    cerclose(cer);
+    throw vpException(0, "Error while finishing initialization");
+  }
+
+  return cer;
 }
 
-/*!
-  Get the robot Jacobian expressed in the robot reference frame.
-  \param[out] fJe : Base (or reference) frame Jacobian.
-*/
-void vpRobotFlirPtu::get_fJe(vpMatrix &fJe)
-{
-  (void)fJe;
-  std::cout << "Not implemented ! " << std::endl;
-}
-
-/*
-  At least one of these function has to be implemented to control the robot:
-  - setCartVelocity()
-  - setJointVelocity()
-*/
-
-/*!
-  Send to the controller a 6-dim velocity skew vector expressed in a Cartesian frame.
-  \param[in] frame : Cartesian control frame (either tool frame or end-effector) in which the velocity \e v is expressed.
-  Units are m/s for translation and rad/s for rotation velocities.
-  \param[in] v : 6-dim vector that contains the 6 components of the velocity skew to send to the robot. 
-  Units are m/s and rad/s.
-*/
-void vpRobotFlirPtu::setCartVelocity(const vpRobot::vpControlFrameType frame, const vpColVector &v)
-{
-  if (v.size() != 6) {
-    throw(vpException(vpException::fatalError,
-                      "Cannot send a velocity-skew vector in tool frame that is not 6-dim (%d)", v.size()));
-  }
-
-  vpColVector v_e; // This is the velocity that the robot is able to apply in the end-effector frame
-  switch (frame) {
-  case vpRobot::TOOL_FRAME: {
-    // We have to transform the requested velocity in the end-effector frame.
-    // Knowing that the constant transformation between the tool frame and the end-effector frame obtained
-    // by extrinsic calibration is set in m_eMc we can compute the velocity twist matrix eVc that transform
-    // a velocity skew from tool (or camera) frame into end-effector frame
-    vpVelocityTwistMatrix eVc(m_eMc);
-    v_e = eVc * v;
-    break;
-  }
-
-  case vpRobot::END_EFFECTOR_FRAME:
-  case vpRobot::REFERENCE_FRAME: {
-    v_e = v;
-    break;
-  }
-  case vpRobot::JOINT_STATE:
-  case vpRobot::MIXT_FRAME:
-    // Out of the scope
-    break;
-  }
-
-  // Implement your stuff here to send the end-effector velocity skew v_e
-  // - If the SDK allows to send cartesian velocities in the end-effector, it's done. Just wrap data in v_e
-  // - If the SDK allows to send cartesian velocities in the reference (or base) frame you have to implement
-  //   the robot Jacobian in set_fJe() and call:
-  //   vpColVector v = get_fJe().inverse() * v_e;
-  //   At this point you have to wrap data in v that is the 6-dim velocity to apply to the robot
-  // - If the SDK allows to send only joint velocities you have to implement the robot Jacobian in set_eJe()
-  //   and call:
-  //   vpColVector qdot = get_eJe().inverse() * v_e;
-  //   setJointVelocity(qdot);
-  // - If the SDK allows to send only a cartesian position trajectory of the end-effector position in the base frame
-  //   called fMe (for fix frame to end-effector homogeneous transformation) you can transform the cartesian
-  //   velocity in the end-effector into a displacement eMe using the exponetial map:
-  //   double delta_t = 0.010; // in sec
-  //   vpHomogenesousMatrix eMe = vpExponentialMap::direct(v_e, delta_t);
-  //   vpHomogenesousMatrix fMe = getPosition(vpRobot::REFERENCE_FRAME);
-  //   the new position to reach is than given by fMe * eMe
-  //   vpColVector fpe(vpPoseVector(fMe * eMe));
-  //   setPosition(vpRobot::REFERENCE_FRAME, fpe);
-
-  std::cout << "Not implemented ! " << std::endl;
-  std::cout << "To implement me you need : " << std::endl;
-  std::cout << "\t to known the robot jacobian expressed in ";
-  std::cout << "the end-effector frame (eJe) " << std::endl;
-  std::cout << "\t the frame transformation  between tool or camera frame ";
-  std::cout << "and end-effector frame (cMe)" << std::endl;
-}
-
-/*!
-  Send a joint velocity to the controller.
-  \param[in] qdot : Joint velocities vector. Units are rad/s for a robot arm.
+/**
+ * Finish the initialization of the robot by sending different parameters to it
+ * \param baud the baudrate
+ * \param timeout the command timeout
+ * \param cer the robot
+ *
+ * \returns true if the robot has been correctly initialized
  */
-void vpRobotFlirPtu::setJointVelocity(const vpColVector &qdot)
+bool vpRobotFlirPtu::finishInit(int baud, int timeout, struct cerial *cer, bool immediateMode)
 {
-  (void)qdot;
+  if (verbose)
+    std::cout << "Finishing initialization" << std::endl;
 
-  // Implement your stuff here to send the joint velocities qdot
+  /* set baudrate
+   * ignore errors since not all devices are serial ports
+   */
+  cerioctl(cer, CERIAL_IOCTL_BAUDRATE_SET, &baud);
 
-  std::cout << "Not implemented ! " << std::endl;
-}
+  /* flush any characters already buffered */
+  cerioctl(cer, CERIAL_IOCTL_FLUSH_INPUT, NULL);
 
-/*!
-  Send to the controller a velocity in a given frame.
-  \param[in] frame : Control frame in which the velocity \e vel is expressed.
-  Velocities could be joint velocities, or cartesian velocities. Units are m/s for translation and
-  rad/s for rotation velocities.
-  \param[in] vel : Vector that contains the velocity to apply to the robot.
- */
-void vpRobotFlirPtu::setVelocity(const vpRobot::vpControlFrameType frame, const vpColVector &vel)
-{
-  if (vpRobot::STATE_VELOCITY_CONTROL != getRobotState()) {
-    throw vpRobotException(vpRobotException::wrongStateError,
-                           "Cannot send a velocity to the robot. "
-                           "Call setRobotState(vpRobot::STATE_VELOCITY_CONTROL) once before "
-                           "entering your control loop.");
+  /* set two second timeout */
+  if (cerioctl(cer, CERIAL_IOCTL_TIMEOUT_SET, &timeout)) {
+    std::cout << "cerial: timeout ioctl not supported" << std::endl;
+    return false;
   }
 
-  vpColVector vel_sat(6);
+  if (!syncAndLock(cer)) {
+    throw vpRobotException(vpRobotException::lowLevelError, "Error during sync");
+  }
 
-  // Velocity saturation
-  switch (frame) {
-  // Saturation in cartesian space
-  case vpRobot::TOOL_FRAME:
-  case vpRobot::REFERENCE_FRAME:
-  case vpRobot::END_EFFECTOR_FRAME:
-  case vpRobot::MIXT_FRAME: {
-    if (vel.size() != 6) {
-      throw(vpException(vpException::dimensionError,
-                        "Cannot apply a Cartesian velocity that is not a 6-dim vector (%d)", vel.size()));
+  /* immediately execute commands
+   * (slave mode should be opt-in)
+   */
+  if (immediateMode) {
+    int rc;
+    if ((rc = cpi_ptcmd(cer, &status, OP_EXEC_MODE_SET, (cpi_enum)CPI_IMMEDIATE_MODE))) {
+      std::cout << "Set Immediate Mode failed: " << cpi_strerror(rc) << std::endl;
+      exit(rc);
     }
-    vpColVector vel_max(6);
-
-    for (unsigned int i = 0; i < 3; i++)
-      vel_max[i] = getMaxTranslationVelocity();
-    for (unsigned int i = 3; i < 6; i++)
-      vel_max[i] = getMaxRotationVelocity();
-
-    vel_sat = vpRobot::saturateVelocities(vel, vel_max, true);
-
-    setCartVelocity(frame, vel_sat);
-    break;
   }
-  // Saturation in joint space
-  case vpRobot::JOINT_STATE: {
-    if (vel.size() != static_cast<size_t>(nDof)) {
-      throw(vpException(vpException::dimensionError, "Cannot apply a joint velocity that is not a %d-dim vector (%d)",
-                        nDof, vel.size()));
-    }
-    vpColVector vel_max(vel.size());
 
-    // Since the robot has only rotation axis all the joint max velocities are set to getMaxRotationVelocity()
-    vel_max = getMaxRotationVelocity();
-
-    vel_sat = vpRobot::saturateVelocities(vel, vel_max, true);
-
-    setJointVelocity(vel_sat);
-  }
-  }
+  return true;
 }
 
-/*
-  THESE FUNCTIONS ARE NOT MENDATORY BUT ARE USUALLY USEFUL
-*/
-
-/*!
-  Get robot joint positions.
-  \param[in] q : Joint velocities in rad/s.
+/** Initialize the continuous boolean based on the current value of the robot
  */
-void vpRobotFlirPtu::getJointPosition(vpColVector &q)
+void vpRobotFlirPtu::initContinuous()
 {
-  (void)q;
-  std::cout << "Not implemented ! " << std::endl;
+  cpi_enable ret;
+  cpi_ptcmd(cer, &status, OP_PAN_CONTINUOUS_GET, &ret);
+  if (ret == CPI_ENABLE)
+    continuousMode = true;
+  else
+    continuousMode = false;
 }
 
-/*!
-  Get robot position.
-  \param[in] frame : Considered cartesian frame or joint state.
-  \param[out] q : Position of the arm.
+/**
+ *	Initialize maximum speeds and send them to the robot. Also activate the relative positioning.
+ */
+void vpRobotFlirPtu::initValues()
+{
+  // Initializing max speeds
+  if (verbose)
+    std::cout << "Initializing max speeds values" << std::endl;
+
+  int maxPanSpeed;
+  int maxTiltSpeed;
+
+  if (cpi_ptcmd(cer, &status, OP_PAN_UPPER_SPEED_LIMIT_GET, &maxPanSpeed) ||
+      cpi_ptcmd(cer, &status, OP_TILT_UPPER_SPEED_LIMIT_GET, &maxTiltSpeed)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to read current position");
+  }
+
+  setMaxRotationVelocity(FLIR_AXIS_PAN, maxPanSpeed);
+  setMaxRotationVelocity(FLIR_AXIS_TILT, maxTiltSpeed);
+
+  setPositioningVelocity(FLIR_AXIS_PAN, 0.1);
+  setPositioningVelocity(FLIR_AXIS_TILT, 0.1);
+
+  setRelativePositioning(true);
+  // setContinuous(false);
+  initContinuous();
+  q_previous = 0;
+}
+
+////////
+////
+////	USEFUL COMMANDS
+////
+////////
+
+/** Convert the angle from position to radian
+ * \param pos  the angle in position (Unit of the robot - 2pi radians = 36 000 positions)
+ * \returns the angle in radian
+ */
+double vpRobotFlirPtu::posToRadian(int pos) { return vpMath::rad((double)pos / 100.0); }
+
+/** Convert the angle from radian to position
+ * \param rad  the angle in radian
+ * \returns the angle in radian (2pi radians = 36 000 positions)
+ */
+int vpRobotFlirPtu::radianToPos(double rad) { return vpMath::deg(rad) * 100; }
+
+/** Reset the robot. Must be called after setting the continious mode
+ *
+ */
+void vpRobotFlirPtu::reset()
+{
+  if (verbose)
+    std::cout << "Resetting the robot" << std::endl;
+
+  int err;
+  if (err = cpi_ptcmd(cer, &status, OP_RESET, (cpi_enum)CPI_RESET_ALL)) {
+    if (!syncAndLock(cer)) {
+      throw vpRobotException(vpRobotException::lowLevelError, "Error during reset :" + err);
+    }
+  }
+}
+
+/** Bring the robot to the "home" position
+ *
+ */
+void vpRobotFlirPtu::goHome()
+{
+  if (verbose)
+    std::cout << "Going to home position" << std::endl;
+
+  // On exécute le déplacement absolu jusqu'en 0, en pan et en tilt
+  if (cpi_ptcmd(cer, &status, OP_PAN_DESIRED_POS_SET, (int)0) ||
+      cpi_ptcmd(cer, &status, OP_TILT_DESIRED_POS_SET, (int)0)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to go to the position.");
+  }
+  // On bloque jusqu'à atteindre la position souhaitée
+  if (cpi_block_until(cer, NULL, NULL, OP_PAN_CURRENT_POS_GET, 0) ||
+      cpi_block_until(cer, NULL, NULL, OP_TILT_CURRENT_POS_GET, 0)) {
+    throw vpException(vpRobotException::lowLevelError, "Blocking failed.\n");
+  }
+}
+
+/** Synchronize to the robot
+ *\param cer  the robot)
+ */
+bool vpRobotFlirPtu::syncAndLock(struct cerial *cer)
+{
+  if (verbose)
+    std::cout << "Sync and lock" << std::endl;
+
+  /* sync and lock */
+  int attempt = 0;
+  do {
+    attempt++;
+  } while (attempt <= 3 && (cpi_resync(cer) || cpi_ptcmd(cer, &status, OP_NOOP)));
+  if (attempt > 3) {
+    std::cout << "Cannot communicate with PTU" << std::endl;
+    return false;
+  }
+  return true;
+}
+
+////////
+////
+////	SERVOING COMMANDS
+////
+////////
+
+/**
+ * Stop all operations in progress
+ */
+void vpRobotFlirPtu::halt()
+{
+  if (cpi_ptcmd(cer, &status, OP_HALT, (cpi_halt)CPI_HALT_ALL)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to halt operations.");
+  }
+}
+
+/** Returns true if relative positioning mode is on.
+ *	\returns false if absolute positioning
+ */
+bool vpRobotFlirPtu::isRelativePositioning() { return relativePositioning; }
+
+/** Set the relative positioning or absolute positioning mode.
+ * \param b true for relative positioning, false for absolute positioning
+ */
+void vpRobotFlirPtu::setRelativePositioning(bool b)
+{
+  if (verbose)
+    std::cout << "Setting relative positioning" << std::endl;
+
+  relativePositioning = b;
+}
+
+/** Set continuous mode
+ * /!\ Restart the robot (via reset()) to apply the modification
+ * \param b	true for continuous mode
+ */
+void vpRobotFlirPtu::setContinuous(bool b)
+{
+  if (verbose)
+    std::cout << "Setting continuous mode" << std::endl;
+
+  continuousMode = b;
+  if (cpi_ptcmd(cer, &status, OP_PAN_CONTINUOUS_SET, b ? (cpi_enable)CPI_ENABLE : (cpi_enable)CPI_DISABLE)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to set continuous mode.");
+  }
+  reset();
+}
+
+/** Returns true if the robot is in continuous mode
+ * \returns false overwise
+ */
+bool vpRobotFlirPtu::getContinuous() { return continuousMode; }
+
+/** Returns the actual absolute position
+ * \param frame the type of frame in which the position is computed (not yet implemented)
+ * \param q the returning position (in rad)
  */
 void vpRobotFlirPtu::getPosition(const vpRobot::vpControlFrameType frame, vpColVector &q)
 {
-  if (frame == JOINT_STATE) {
-    getJointPosition(q);
-  } else {
-    std::cout << "Not implemented ! " << std::endl;
+  int pan, tilt;
+  if (cpi_ptcmd(cer, &status, OP_PAN_CURRENT_POS_GET, &pan) ||
+      cpi_ptcmd(cer, &status, OP_TILT_CURRENT_POS_GET, &tilt)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to read current position");
   }
+  q[0] = posToRadian(pan);
+  q[1] = posToRadian(tilt);
 }
 
-/*!
-  Set a position to reach.
-  \param[in] frame : Considered cartesian frame or joint state.
-  \param[in] q : Position to reach.
+/** Returns the actual absolute position
+ * \param frame the type of frame in which the position is computed (not yet implemented)
+ * \returns the actual absolute position (in rad)
+ */
+vpColVector vpRobotFlirPtu::getPosition(const vpRobot::vpControlFrameType frame)
+{
+  vpColVector q(2);
+  vpRobotFlirPtu::getPosition(frame, q);
+  return q;
+}
+
+/** Send a position to the robot, absolute or relative depending on the activated mode (cf setRelativePositioning())
+ *	\param frame the type of frame (not implemented yet)
+ *	\param q the positioning vector in rad
  */
 void vpRobotFlirPtu::setPosition(const vpRobot::vpControlFrameType frame, const vpColVector &q)
 {
-  (void)frame;
-  (void)q;
-  std::cout << "Not implemented ! " << std::endl;
+  if (verbose)
+    std::cout << "Setting position" << std::endl;
+
+  if (q.getRows() != 2) {
+    vpERROR_TRACE("Bad dimension for positioning vector.");
+    throw vpRobotException(vpRobotException::lowLevelError, "Bad dimension for positioning vector.");
+  }
+
+  vpColVector pos_q(2);
+  pos_q[0] = radianToPos(q[0]);
+  pos_q[1] = radianToPos(q[1]);
+
+  // On récupère les positions max/min du tilt
+  int minPanPos, maxPanPos;
+  int minTiltPos, maxTiltPos;
+  if (cpi_ptcmd(cer, &status, OP_TILT_MIN_POSITION, &minTiltPos) ||
+      cpi_ptcmd(cer, &status, OP_TILT_MAX_POSITION, &maxTiltPos)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to read max/min tilt positions");
+  }
+
+  int currPanPos;
+  int currTiltPos;
+  cpi_ptcmd(cer, &status, OP_PAN_CURRENT_POS_GET, &currPanPos);
+  cpi_ptcmd(cer, &status, OP_TILT_CURRENT_POS_GET, &currTiltPos);
+
+  if (isRelativePositioning()) {
+    if (!getContinuous()) {
+      // On récupère les positions max/min du pan
+      if (cpi_ptcmd(cer, &status, OP_PAN_MAX_POSITION, &maxPanPos) ||
+          cpi_ptcmd(cer, &status, OP_PAN_MIN_POSITION, &minPanPos)) {
+        throw vpException(vpRobotException::lowLevelError, "Failed to read max/min pan positions");
+      }
+      if (((currPanPos + pos_q[0]) > maxPanPos) || ((currPanPos + pos_q[0]) < minPanPos))
+        throw vpException(vpRobotException::lowLevelError, "Out of Pan bounds");
+    }
+    if (((currTiltPos + pos_q[1]) > maxTiltPos) || ((currTiltPos + pos_q[1]) < minTiltPos))
+      throw vpException(vpRobotException::lowLevelError, "Out of tilt bounds");
+  } else {
+    if ((pos_q[0] > maxPanPos) || (pos_q[0] < minPanPos))
+      throw vpException(vpRobotException::lowLevelError, "Out of Pan bounds");
+
+    if ((pos_q[1] > maxTiltPos) || (pos_q[1] < minTiltPos))
+      throw vpException(vpRobotException::lowLevelError, "Out of tilt bounds");
+  }
+
+  // On active le mode "independant", pour envoyer une position
+  if (cpi_ptcmd(cer, &status, OP_SPEED_CONTROL_MODE_SET, (cpi_control)CPI_CONTROL_INDEPENDENT)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to set independent control mode");
+  }
+
+  /* Deprecated, used to set the speed in percentage of max speed
+  // On récupère la vitesse max
+  int maxTiltSpeed, maxPanSpeed;
+  if (cpi_ptcmd(cer, &status, OP_PAN_UPPER_SPEED_LIMIT_GET, &maxPanSpeed) ||
+          cpi_ptcmd(cer, &status, OP_TILT_UPPER_SPEED_LIMIT_GET, &maxTiltSpeed)) {
+          throw vpException(vpRobotException::lowLevelError, "Failed to read max speeds");
+  }
+  */
+
+  // On indique la vitesse souhaitée
+  if (cpi_ptcmd(cer, &status, OP_PAN_DESIRED_SPEED_SET, radianToPos(getPositioningVelocity(FLIR_AXIS_PAN))) ||
+      cpi_ptcmd(cer, &status, OP_TILT_DESIRED_SPEED_SET, radianToPos(getPositioningVelocity(FLIR_AXIS_TILT)))) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to set the velocity.");
+  }
+
+  if (isRelativePositioning()) {
+    // On exécute le déplacement relatif jusqu'à la position souhaitée
+    if (cpi_ptcmd(cer, &status, OP_PAN_DESIRED_POS_REL_SET, (int)pos_q[0]) ||
+        cpi_ptcmd(cer, &status, OP_TILT_DESIRED_POS_REL_SET, (int)pos_q[1])) {
+      throw vpException(vpRobotException::lowLevelError, "Failed to go to the position.");
+    }
+  } else {
+    // On exécute le déplacement absolu jusqu'à la position souhaitée
+    if (cpi_ptcmd(cer, &status, OP_PAN_DESIRED_POS_SET, (int)pos_q[0]) ||
+        cpi_ptcmd(cer, &status, OP_TILT_DESIRED_POS_SET, (int)pos_q[1])) {
+      throw vpException(vpRobotException::lowLevelError, "Failed to go to the position.");
+    }
+  }
+
+  // Doit-on bloquer l'envoi de nouvelles commandes ?
+  if (getBlockUntilPositioned()) {
+
+    // On récupère la position finale absolue souhaitée
+    int posAbsTilt, posAbsPan;
+    if (cpi_ptcmd(cer, &status, OP_PAN_DESIRED_POS_GET, &posAbsPan) ||
+        cpi_ptcmd(cer, &status, OP_TILT_DESIRED_POS_GET, &posAbsTilt)) {
+      throw vpException(vpRobotException::lowLevelError, "Failed to read max speeds");
+    }
+
+    // On bloque jusqu'à atteindre la position souhaitée
+    if (cpi_block_until(cer, NULL, NULL, OP_PAN_CURRENT_POS_GET, posAbsPan) ||
+        cpi_block_until(cer, NULL, NULL, OP_TILT_CURRENT_POS_GET, posAbsTilt)) {
+      throw vpException(vpRobotException::lowLevelError, "Blocking failed.\n");
+    }
+  }
 }
 
-/*!
-  Get a displacement.
-  \param[in] frame : Considered cartesian frame or joint state.
-  \param[out] q : Displacement in meter and rad.
+/** Get the current robot velocity. For the desired velocity during positioning, see getPositioningVelocity().
+ * \returns q[0] = velocity of the pan axis, q[1] = velocity of the tilt axis
  */
-void vpRobotFlirPtu::getDisplacement(const vpRobot::vpControlFrameType frame, vpColVector &q)
+vpColVector vpRobotFlirPtu::getVelocity()
 {
-  (void)frame;
-  (void)q;
-  std::cout << "Not implemented ! " << std::endl;
+  int veloPan, veloTilt;
+  if (cpi_ptcmd(cer, &status, OP_PAN_CURRENT_SPEED_GET, &veloPan) ||
+      cpi_ptcmd(cer, &status, OP_TILT_CURRENT_SPEED_GET, &veloTilt)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to get the velocity.");
+  }
+  vpColVector q(2);
+  q[0] = posToRadian(veloPan);
+  q[1] = posToRadian(veloTilt);
+  return q;
 }
 
-#elif !defined(VISP_BUILD_SHARED_LIBS)
-// Work arround to avoid warning: libvisp_robot.a(vpRobotFlirPtu.cpp.o) has
-// no symbols
-void dummy_vpRobotFlirPtu(){};
+// En radians
+/** Move the robot based on pure velocity instead of position. The velocity is in rad/s.
+ * \param frame the frame of the displacement (not yet implemented)
+ * \param q_dot the velocity
+ */
+void vpRobotFlirPtu::setVelocity(const vpRobot::vpControlFrameType frame, const vpColVector &q_dot)
+{
+
+  if (frame != vpControlFrameType::ARTICULAR_FRAME) {
+    throw vpException(vpRobotException::lowLevelError, "Not implemented for anything except articular frame");
+  }
+
+  if (q_dot.getRows() != 2) {
+    vpERROR_TRACE("Bad dimension for velocity vector.");
+    throw vpRobotException(vpRobotException::lowLevelError, "Bad dimension for velocity vector.");
+  }
+
+  int vPan = radianToPos(q_dot[0]);
+  int vTilt = radianToPos(q_dot[1]);
+
+  // On active le mode "vélocité pure", pour envoyer seulement une vitesse
+  if (cpi_ptcmd(cer, &status, OP_SPEED_CONTROL_MODE_SET, (cpi_control)CPI_CONTROL_PURE_VELOCITY)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to set pure velocity");
+  }
+
+  // On indique la vitesse souhaitée
+  if (cpi_ptcmd(cer, &status, OP_PAN_DESIRED_SPEED_SET, vPan) ||
+      cpi_ptcmd(cer, &status, OP_TILT_DESIRED_SPEED_SET, vTilt)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to set the velocity.");
+  }
+}
+
 #endif

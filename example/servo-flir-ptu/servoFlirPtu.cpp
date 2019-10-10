@@ -46,7 +46,7 @@
 int main()
 {
   try {
-    vpRobotFlirPtu robot;
+    vpRobotFlirPtu robot(0);
     vpColVector q(2);
 
     robot.setRobotState(vpRobot::STATE_POSITION_CONTROL);
