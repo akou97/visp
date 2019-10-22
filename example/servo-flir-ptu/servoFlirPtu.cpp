@@ -36,6 +36,7 @@
  *
  *****************************************************************************/
 
+#include <stdio.h>
 #include <visp3/core/vpConfig.h>
 
 #ifdef VISP_HAVE_FLIRPTUCPI
@@ -46,23 +47,31 @@
 int main()
 {
   try {
-    vpRobotFlirPtu robot(0);
-    vpColVector q(2);
+    vpRobotFlirPtu robot(6);
+    vpColVector q(2, 0);
 
+	robot.setVerbose(true);
     robot.setRobotState(vpRobot::STATE_POSITION_CONTROL);
-
+  
     q = 0;
     std::cout << "Set position in the articular frame: " << q.t() << std::endl;
     robot.setPosition(vpRobot::ARTICULAR_FRAME, q);
 
+	int val;
+    std::cout << "on attend" << std::endl;
+        scanf("%d", &val);
+
     q[0] = vpMath::rad(10);
-    q[1] = vpMath::rad(20);
+    q[1] = vpMath::rad(10);
     std::cout << "Set position in the articular frame: " << q.t() << std::endl;
     robot.setPosition(vpRobot::ARTICULAR_FRAME, q);
 
     vpColVector qm(2);
     robot.getPosition(vpRobot::ARTICULAR_FRAME, qm);
-    std::cout << "Position in the articular frame " << qm.t() << std::endl;
+    std::cout << "Position in the articular frame (rad):" << qm.t() << std::endl;
+    std::cout << "Position in the articular frame (deg)" << vpMath::deg(qm[0]) << " " << vpMath::deg(qm[1])
+               << std::endl;
+    return EXIT_SUCCESS;
 
     vpColVector qdot(2);
     robot.setRobotState(vpRobot::STATE_VELOCITY_CONTROL);

@@ -50,7 +50,6 @@
 #include <visp3/core/vpHomogeneousMatrix.h>
 #include <visp3/robot/vpRobotFlirPtu.h>
 
-
 /**
 Basic constructor for SERIAL connection
 \param port Serial port number
@@ -59,6 +58,7 @@ vpRobotFlirPtu::vpRobotFlirPtu(int port)
 {
   initMode = INIT_SERIAL;
   this->port = port;
+  init();
 }
 
 /**
@@ -69,6 +69,7 @@ vpRobotFlirPtu::vpRobotFlirPtu(std::string ip)
 {
   initMode = INIT_IP;
   this->ip = ip;
+  init();
 }
 
 /**
@@ -240,12 +241,18 @@ void vpRobotFlirPtu::setVerbose(bool verbose)
 
 void vpRobotFlirPtu::init()
 {
-  if (verbose)
-    std::cout << "Initializing the robot" << std::endl;
-  if (initMode == INIT_IP)
+  if (initMode == INIT_IP) {
+    if (verbose) {
+      std::cout << "Initializing the robot in IP mode" << std::endl;
+    }
     this->cer = init(ip);
-  else if (initMode == INIT_SERIAL)
+  } else if (initMode == INIT_SERIAL) {
+    if (verbose) {
+      std::cout << "Initializing the robot in serial mode" << std::endl;
+    }
     this->cer = init(port);
+  }
+
   initValues();
 }
 
@@ -264,6 +271,10 @@ struct cerial *vpRobotFlirPtu::init(int port)
 
   std::string portAsString = "COM" + std::to_string(port);
   portname = portAsString.c_str();
+
+  if (verbose) {
+    std::cout << "Use serial port: " << portname << std::endl;
+  }
 
   cer = (cerial *)malloc(sizeof(struct cerial));
 
@@ -432,7 +443,7 @@ double vpRobotFlirPtu::posToRadian(int pos) { return vpMath::rad((double)pos / 1
  * \param rad  the angle in radian
  * \returns the angle in radian (2pi radians = 36 000 positions)
  */
-int vpRobotFlirPtu::radianToPos(double rad) { return vpMath::deg(rad) * 100; }
+int vpRobotFlirPtu::radianToPos(double rad) { return static_cast<int>(vpMath::deg(rad) * 100); }
 
 /** Reset the robot. Must be called after setting the continious mode
  *
