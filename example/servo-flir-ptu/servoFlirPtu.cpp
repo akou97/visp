@@ -37,6 +37,7 @@
  *****************************************************************************/
 
 #include <stdio.h>
+#include <string.h>
 #include <visp3/core/vpConfig.h>
 
 #ifdef VISP_HAVE_FLIRPTUCPI
@@ -47,20 +48,26 @@
 int main()
 {
   try {
-    vpRobotFlirPtu robot(6);
+    std::string ip1("169.254.110.254");
+    std::string ip2("169.254.110.253");
+    vpRobotFlirPtu robot(ip2);
     vpColVector q(2, 0);
 
 	robot.setVerbose(true);
+    robot.setRelativePositioning(false);
+        robot.setMaxRotationVelocity(vpRobotFlirPtu::FLIR_AXIS_PAN, vpMath::rad(2));
+       // robot.setPositioningVelocity(100.);
     robot.setRobotState(vpRobot::STATE_POSITION_CONTROL);
   
     q = 0;
     std::cout << "Set position in the articular frame: " << q.t() << std::endl;
     robot.setPosition(vpRobot::ARTICULAR_FRAME, q);
+   
 
 	int val;
     std::cout << "on attend" << std::endl;
         scanf("%d", &val);
-
+	
     q[0] = vpMath::rad(10);
     q[1] = vpMath::rad(10);
     std::cout << "Set position in the articular frame: " << q.t() << std::endl;
@@ -71,26 +78,31 @@ int main()
     std::cout << "Position in the articular frame (rad):" << qm.t() << std::endl;
     std::cout << "Position in the articular frame (deg)" << vpMath::deg(qm[0]) << " " << vpMath::deg(qm[1])
                << std::endl;
-    return EXIT_SUCCESS;
+
+	 std::cout << "on attend" << std::endl;
+    scanf("%d", &val);
+    
 
     vpColVector qdot(2);
     robot.setRobotState(vpRobot::STATE_VELOCITY_CONTROL);
-#if 0
+#if 1
     qdot = 0 ;
     qdot[0] = vpMath::rad(10) ;
     qdot[1] = vpMath::rad(10) ;
-    std::cout << "Set camera frame velocity " << qdot.t() << std::endl;
+    std::cout << "Set articular frame velocity " << qdot.t() << std::endl;
 
-    robot.setVelocity(vpRobot::CAMERA_FRAME, qdot) ;
-    sleep(2) ;
+    robot.setVelocity(vpRobot::ARTICULAR_FRAME, qdot) ;
+    vpTime::sleepMs(2000) ;
+  
+	return EXIT_SUCCESS;
 
     qdot = 0 ;
     qdot[0] = vpMath::rad(-10) ;
     qdot[1] = vpMath::rad(-10) ;
 
-    std::cout << "Set camera frame velocity " << qdot.t() << std::endl;
-    robot.setVelocity(vpRobot::CAMERA_FRAME, qdot) ;
-    sleep(2) ;
+    std::cout << "Set articular frame velocity " << qdot.t() << std::endl;
+    robot.setVelocity(vpRobot::ARTICULAR_FRAME, qdot) ;
+    vpTime::sleepMs(2000);
 #endif
 
     qdot = 0;

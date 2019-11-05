@@ -35,6 +35,46 @@
  * AKOURIM Youness (ENS Rennes)
  *
  *****************************************************************************/
+/*!
+les méthodes définies dans la classe FlirPtu sont : (Get+Set)
+- set_cMe
+- get_cMe
+- setBlockUntilPositioned
+- getBlockUntilPositioned
+- setPositioningVelocity
+- setMaxRotationVelocity
+- getMaxRotationVelocity
+- getDisplacement
+- get_eJe //ToDo
+- get_fJe //ToDo
+- setVerbose
+
+Pour l'initialisation
+- init
+- finishInit
+- initContinuous
+- initValues
+
+Useful commands
+- posToRadian
+- radianToPos
+- Reset
+- goHome
+- syncAndLock
+
+SERVOING COMMANDS
+- halt
+- isRelativePositioning
+- setRelativePositioning 
+- setContinuous 
+- getPosition 
+- setPosition 
+- getVelocity 
+- setVelocity
+
+*/
+
+
 
 #include <visp3/core/vpConfig.h>
 
@@ -77,10 +117,14 @@ Basic destructor, close the connection to the robot and free the memory
 */
 vpRobotFlirPtu::~vpRobotFlirPtu()
 {
+  vpColVector qdot(2);
+  qdot = 0;
+  setVelocity(ARTICULAR_FRAME, qdot);
   if (verbose)
     std::cout << "Closing connection and destroying vpRobotFlir instance" << std::endl;
   cerclose(cer);
   free(cer);
+  
 }
 
 ////////
@@ -172,7 +216,7 @@ void vpRobotFlirPtu::setMaxRotationVelocity(FlirAxis axis, const double maxVr)
     if (verbose)
       std::cout << "Setting max rotation velocity for pan axis" << std::endl;
     int maxPanSpeed;
-    cpi_ptcmd(cer, &status, OP_PAN_UPPER_SPEED_LIMIT_GET, &maxPanSpeed);
+    cpi_ptcmd(cer, &status, OP_PAN_UPPER_SPEED_LIMIT_GET, &maxPanSpeed); // thanks to this command, we can get maxPanSpeed of Pan
     if (maxVr > maxPanSpeed) {
       throw vpException(vpRobotException::lowLevelError, "The velocity is too high");
     } else if (maxVr <= 0)
@@ -183,7 +227,7 @@ void vpRobotFlirPtu::setMaxRotationVelocity(FlirAxis axis, const double maxVr)
     if (verbose)
       std::cout << "Setting max rotation velocity for tilt axis" << std::endl;
     int maxTiltSpeed;
-    cpi_ptcmd(cer, &status, OP_TILT_UPPER_SPEED_LIMIT_GET, &maxTiltSpeed);
+    cpi_ptcmd(cer, &status, OP_TILT_UPPER_SPEED_LIMIT_GET, &maxTiltSpeed); // thanks to this command, we can get maxPanSpeed of Tilt
     if (maxVr > maxTiltSpeed) {
       throw vpException(vpRobotException::lowLevelError, "The velocity is too high");
     } else if (maxVr <= 0)
@@ -504,7 +548,7 @@ bool vpRobotFlirPtu::syncAndLock(struct cerial *cer)
 ////////
 ////
 ////	SERVOING COMMANDS
-////
+//// 
 ////////
 
 /**
@@ -605,6 +649,10 @@ void vpRobotFlirPtu::setPosition(const vpRobot::vpControlFrameType frame, const 
       cpi_ptcmd(cer, &status, OP_TILT_MAX_POSITION, &maxTiltPos)) {
     throw vpException(vpRobotException::lowLevelError, "Failed to read max/min tilt positions");
   }
+  if (cpi_ptcmd(cer, &status, OP_PAN_MAX_POSITION, &maxPanPos) ||
+      cpi_ptcmd(cer, &status, OP_PAN_MIN_POSITION, &minPanPos)) {
+    throw vpException(vpRobotException::lowLevelError, "Failed to read max/min pan positions");
+  }
 
   int currPanPos;
   int currTiltPos;
@@ -624,6 +672,7 @@ void vpRobotFlirPtu::setPosition(const vpRobot::vpControlFrameType frame, const 
     if (((currTiltPos + pos_q[1]) > maxTiltPos) || ((currTiltPos + pos_q[1]) < minTiltPos))
       throw vpException(vpRobotException::lowLevelError, "Out of tilt bounds");
   } else {
+    std::cout << "pos_q[1]: " << pos_q[1] << " " << minTiltPos << " " << maxTiltPos << std::endl;
     if ((pos_q[0] > maxPanPos) || (pos_q[0] < minPanPos))
       throw vpException(vpRobotException::lowLevelError, "Out of Pan bounds");
 
