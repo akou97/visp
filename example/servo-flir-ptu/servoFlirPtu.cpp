@@ -50,12 +50,12 @@ int main()
   try {
     std::string ip1("169.254.110.254");
     std::string ip2("169.254.110.253");
-    vpRobotFlirPtu robot(ip2);
+    vpRobotFlirPtu robot(ip1);
     vpColVector q(2, 0);
 
-	robot.setVerbose(true);
+	//robot.setVerbose(true);
     robot.setRelativePositioning(false);
-        robot.setMaxRotationVelocity(vpRobotFlirPtu::FLIR_AXIS_PAN, vpMath::rad(2));
+    robot.setMaxRotationVelocity(vpRobotFlirPtu::FLIR_AXIS_PAN, vpMath::rad(2));
        // robot.setPositioningVelocity(100.);
     robot.setRobotState(vpRobot::STATE_POSITION_CONTROL);
   
@@ -81,6 +81,9 @@ int main()
 
 	 std::cout << "on attend" << std::endl;
     scanf("%d", &val);
+
+	
+	
     
 
     vpColVector qdot(2);
