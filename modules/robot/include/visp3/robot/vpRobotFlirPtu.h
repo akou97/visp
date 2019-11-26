@@ -122,12 +122,18 @@ public:
   void getPosition(const vpRobot::vpControlFrameType frame, vpColVector &q);
   vpColVector getPosition(const vpRobot::vpControlFrameType frame);
   vpColVector getVelocity();
-  void get_eJe(vpMatrix &_eJe);
-  void get_fJe(vpMatrix &_fJe);
+  void get_eJe(vpMatrix &);
+  void get_fJe(vpMatrix &);
   void getDisplacement(const vpRobot::vpControlFrameType frame, vpColVector &q);
 
   void set_cMe(vpHomogeneousMatrix m);
   vpHomogeneousMatrix get_cMe();
+
+  void set_eMc(vpHomogeneousMatrix m);
+  vpHomogeneousMatrix get_eMc();
+
+  void set_cVe(vpVelocityTwistMatrix m);
+  vpVelocityTwistMatrix get_cVe();
 
   double posToRadian(int pos);
   int radianToPos(double rad);
@@ -147,6 +153,8 @@ private:
   double		maxTiltVelocity;
   bool			continuousMode;
   vpHomogeneousMatrix cMe;
+  vpHomogeneousMatrix eMc;
+  vpVelocityTwistMatrix cVe;
   bool			verbose;
 
   struct cerial *init(int port);

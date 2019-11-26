@@ -39,14 +39,16 @@
 les méthodes définies dans la classe FlirPtu sont : (Get+Set)
 - set_cMe
 - get_cMe
+- set_eMc (New)
+- get_eMc (New)
 - setBlockUntilPositioned
 - getBlockUntilPositioned
 - setPositioningVelocity
 - setMaxRotationVelocity
 - getMaxRotationVelocity
 - getDisplacement
-- get_eJe //ToDo
-- get_fJe //ToDo
+- get_eJe 
+- get_fJe 
 - setVerbose
 
 Pour l'initialisation
@@ -78,9 +80,11 @@ SERVOING COMMANDS
 
 #include <visp3/core/vpConfig.h>
 
+
 #ifdef VISP_HAVE_FLIRPTUCPI
 
 #include <visp3/robot/vpRobotException.h>
+
 
 /*!
   \file vpRobotFlirPtu.cpp
@@ -148,7 +152,31 @@ void vpRobotFlirPtu::set_cMe(vpHomogeneousMatrix m)
 Get the effector to camera matrix
 \return the matrix
 */
-vpHomogeneousMatrix vpRobotFlirPtu::get_cMe() { return cMe; }
+vpHomogeneousMatrix vpRobotFlirPtu::get_cMe() { 
+  return cMe;
+}
+
+
+/**
+Set the camera to effector matrix
+\param m the matrix
+*/
+void vpRobotFlirPtu::set_eMc(vpHomogeneousMatrix m)
+{
+  if (verbose)
+    std::cout << "Setting eMc" << std::endl;
+  eMc = m;
+}
+
+/**
+Get the camera to effector matrix
+\return the matrix
+*/
+vpHomogeneousMatrix vpRobotFlirPtu::get_eMc() { 
+	return eMc; }
+
+
+
 
 /**
 Block the input until the position is reached (only in position mode)
@@ -267,9 +295,40 @@ void vpRobotFlirPtu::getDisplacement(const vpRobot::vpControlFrameType frame, vp
 }
 
 // TODO
-void vpRobotFlirPtu::get_eJe(vpMatrix &_eJe) { std::cout << " Not implemented yet" << std::endl; }
+void vpRobotFlirPtu::get_eJe(vpMatrix &eJe) {
+  
+  double q1 = getPositioningVelocity(FLIR_AXIS_PAN);
+  double q2 = getPositioningVelocity(FLIR_AXIS_TILT);
+  
+  std::cout << "on est dans eJe" << std::endl;
 
-void vpRobotFlirPtu::get_fJe(vpMatrix &_fJe) { std::cout << " Not implemented yet" << std::endl; }
+  vpMatrix M(6,2,{0, 0, 0, sin(q2), 0, cos(q2), 0, 0, 0, 0, -1, 0});
+  M.reshape(6, 2);
+  eJe = M;
+}
+
+void vpRobotFlirPtu::get_fJe(vpMatrix &fJe)
+{
+  double q1 = getPositioningVelocity(FLIR_AXIS_PAN);
+  double q2 = getPositioningVelocity(FLIR_AXIS_TILT);
+
+  vpMatrix M(6, 2, { 0, 0, 0, 0, 0, -1, 0, 0, 0, -sin(q1),cos(q1),0} );
+  //M.reshape(6, 2);
+  fJe = M;
+
+}
+
+
+/**
+Get the camera to effector Velocity matrix (to check)
+\return the matrix
+*/
+vpVelocityTwistMatrix vpRobotFlirPtu::get_cVe() { 
+	return cVe ; }
+
+
+
+
 
 void vpRobotFlirPtu::setVerbose(bool verbose)
 {
