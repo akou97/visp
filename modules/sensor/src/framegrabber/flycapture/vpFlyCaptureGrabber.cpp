@@ -1119,8 +1119,8 @@ void vpFlyCaptureGrabber::acquire(vpImage<unsigned char> &I, FlyCapture2::TimeSt
   error = m_camera.RetrieveBuffer(&m_rawImage);
   if (error != FlyCapture2::PGRERROR_OK) {
     error.PrintErrorTrace();
-    throw(vpException(vpException::fatalError, "Cannot retrieve image from camera with serial %u",
-                      getCameraSerial(m_index)));
+    //throw(vpException(vpException::fatalError, "Cannot retrieve image from camera with serial %u",
+     //                 getCameraSerial(m_index)));
   }
   timestamp = m_rawImage.GetTimeStamp();
 
@@ -1139,8 +1139,8 @@ void vpFlyCaptureGrabber::acquire(vpImage<unsigned char> &I, FlyCapture2::TimeSt
   error = m_rawImage.Convert(FlyCapture2::PIXEL_FORMAT_MONO8, &convertedImage);
   if (error != FlyCapture2::PGRERROR_OK) {
     error.PrintErrorTrace();
-    throw(vpException(vpException::fatalError, "Cannot convert image from camera with serial %u",
-                      getCameraSerial(m_index)));
+    //throw(vpException(vpException::fatalError, "Cannot convert image from camera with serial %u",
+      //                getCameraSerial(m_index)));
   }
 }
 
@@ -1171,8 +1171,8 @@ void vpFlyCaptureGrabber::acquire(vpImage<vpRGBa> &I, FlyCapture2::TimeStamp &ti
   error = m_camera.RetrieveBuffer(&m_rawImage);
   if (error != FlyCapture2::PGRERROR_OK) {
     error.PrintErrorTrace();
-    throw(vpException(vpException::fatalError, "Cannot retrieve image from camera with serial %u",
-                      getCameraSerial(m_index)));
+    //throw(vpException(vpException::fatalError, "Cannot retrieve image from camera with serial %u",
+        //              getCameraSerial(m_index)));
   }
   timestamp = m_rawImage.GetTimeStamp();
 
@@ -1183,8 +1183,8 @@ void vpFlyCaptureGrabber::acquire(vpImage<vpRGBa> &I, FlyCapture2::TimeStamp &ti
   error = m_rawImage.Convert(FlyCapture2::PIXEL_FORMAT_RGBU, &convertedImage);
   if (error != FlyCapture2::PGRERROR_OK) {
     error.PrintErrorTrace();
-    throw(vpException(vpException::fatalError, "Cannot convert image from camera with serial %u",
-                      getCameraSerial(m_index)));
+    //throw(vpException(vpException::fatalError, "Cannot convert image from camera with serial %u",
+        //              getCameraSerial(m_index)));
   }
   height = convertedImage.GetRows();
   width = convertedImage.GetCols();
